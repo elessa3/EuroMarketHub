@@ -1,45 +1,41 @@
-import { useState } from "react"; // <-- IMPORTANTE: Importando o gerenciador de estado
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native"; // Adicionado TouchableOpacity
-import { mockExpenses } from "../../src/constants/mockData";
-import { EuroExpense } from "../../src/types";
+import { useState, useMemo } from 'react'; // 1. Importamos o useMemo aqui
+import { StyleSheet, Text, View, FlatList, TouchableOpacity } from 'react-native'; 
+import { mockExpenses } from '../../src/constants/mockData'; 
+import { EuroExpense } from '../../src/types'; 
 
 export default function HomeScreen() {
-  // Criando um estado que começa com os nossos dados fakes
   const [expenses, setExpenses] = useState<EuroExpense[]>(mockExpenses);
 
-  // Função que vai ser disparada quando você clicar no cartão
+  // 2. A Mágica do useMemo acontece aqui:
+  const totalBudget = useMemo(() => {
+    console.log('🔄 Calculando o total em Euro...'); // Esse log serve para você ver a performance no console!
+    
+    // Usamos o método .reduce do JavaScript para somar os valores da lista
+    return expenses.reduce((accumulator, currentExpense) => {
+      return accumulator + currentExpense.valueInEuro;
+    }, 0);
+
+  }, [expenses]); // <-- ARRAY DE DEPENDÊNCIAS: O cálculo só refaz se a lista 'expenses' mudar!
+
   const toggleExpenseStatus = (id: string) => {
-    const updatedExpenses = expenses.map((expense) => {
+    const updatedExpenses = expenses.map(expense => {
       if (expense.id === id) {
-        // Inverte o status de isPaid (se era true vira false, se era false vira true)
         return { ...expense, isPaid: !expense.isPaid };
       }
       return expense;
     });
-
-    // Atualiza a tela com os novos dados
     setExpenses(updatedExpenses);
   };
 
   const renderExpenseItem = ({ item }: { item: EuroExpense }) => (
-    // Transformamos o View antigo em um TouchableOpacity para poder clicar
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => toggleExpenseStatus(item.id)} // Dispara a função ao clicar
-    >
+    <TouchableOpacity style={styles.card} onPress={() => toggleExpenseStatus(item.id)}>
       <View style={styles.cardHeader}>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.categoryTag}>{item.category}</Text>
       </View>
       <Text style={styles.price}>€ {item.valueInEuro.toFixed(2)}</Text>
       <Text style={[styles.status, item.isPaid ? styles.paid : styles.pending]}>
-        {item.isPaid ? "Pago ✅" : "Pendente ⏳"}
+        {item.isPaid ? 'Pago ✅' : 'Pendente ⏳'}
       </Text>
     </TouchableOpacity>
   );
@@ -49,8 +45,14 @@ export default function HomeScreen() {
       <Text style={styles.headerTitle}>EuroMarket Hub 🇪🇺</Text>
       <Text style={styles.subtitle}>Planejamento de Custos</Text>
 
+      {/* 3. Exibindo o valor total calculado pelo useMemo na tela */}
+      <View style={styles.totalContainer}>
+        <Text style={styles.totalLabel}>Custo Total Estimado:</Text>
+        <Text style={styles.totalValue}>€ {totalBudget.toFixed(2)}</Text>
+      </View>
+
       <FlatList
-        data={expenses} // <-- IMPORTANTE: Agora usamos o estado, não os dados fixos
+        data={expenses} 
         keyExtractor={(item) => item.id}
         renderItem={renderExpenseItem}
         contentContainerStyle={styles.listContainer}
@@ -124,5 +126,24 @@ const styles = StyleSheet.create({
   },
   pending: {
     color: "#c62828",
+  },
+  // Adicione estes blocos dentro do seu StyleSheet
+  totalContainer: {
+    backgroundColor: '#1a237e', // Um azul escuro bem elegante
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  totalLabel: {
+    color: '#bbdefb',
+    fontSize: 14,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+  },
+  totalValue: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginTop: 4,
   },
 });
