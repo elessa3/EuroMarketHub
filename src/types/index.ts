@@ -24,3 +24,13 @@ export interface JobOpportunity {
   salaryRange?: string; // A interrogação significa que o salário é opcional (na Europa nem sempre divulgam)
   status: "Aplicado" | "Entrevista" | "Recusado" | "Oferta" | "In progress";
 }
+
+// Contrato para a API de Cotação de Moedas
+export interface CurrencyRate {
+  code: string;       // Ex: "EUR"
+  codein: string;     // Ex: "BRL"
+  name: string;       // Ex: "Euro/Real Brasileiro"
+  bid: string;        // Valor de compra (ex: "5.45")
+  pctChange: string;  // Variação percentual do dia
+  create_date: string; // Data da última atualização
+}

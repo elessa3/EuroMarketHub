@@ -1,24 +1,98 @@
-import { useState, useMemo } from 'react'; // 1. Importamos o useMemo aqui
-import { StyleSheet, Text, View, FlatList, TouchableOpacity } from 'react-native'; 
-import { mockExpenses } from '../../src/constants/mockData'; 
-import { EuroExpense } from '../../src/types'; 
+import { useEffect, useMemo, useState } from "react"; // 1. Importamos o useMemo aqui
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { mockExpenses } from "../../src/constants/mockData";
+import { CurrencyRate, EuroExpense } from "../../src/types";
 
 export default function HomeScreen() {
   const [expenses, setExpenses] = useState<EuroExpense[]>(mockExpenses);
+  // Novos estados para controlar os dados da API e o carregamento
+  const [exchangeRate, setExchangeRate] = useState<CurrencyRate | null>(null);
+  const [loadingRate, setLoadingRate] = useState<boolean>(true);
 
+  // 2. A MÁGICA DO useEffect ACONTECE AQUI:
+  useEffect(() => {
+    async function fetchEuroRate() {
+      try {
+        setLoadingRate(true);
+
+        // Usando a API oficial do Frankfurter (União Europeia) para EUR -> BRL
+        const response = await fetch(
+          "https://api.frankfurter.app/latest?from=EUR&to=BRL",
+        );
+
+        if (response.status === 429) {
+          console.warn(
+            "⚠️ Limite de requisições atingido (429). Usando valor de fallback.",
+          );
+          // Define um valor aproximado de fallback caso ocorra o erro 429
+          setExchangeRate({
+            code: "EUR",
+            codein: "BRL",
+            name: "Euro/Real Brasileiro",
+            bid: "6.10",
+            pctChange: "0",
+            create_date: new Date().toISOString(),
+          });
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(`Erro HTTP: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("Data da API do Frankfurter:", data);
+
+        if (data && data.rates && data.rates.BRL) {
+          setExchangeRate({
+            code: "EUR",
+            codein: "BRL",
+            name: "Euro/Real",
+            bid: data.rates.BRL.toString(),
+            pctChange: "0",
+            create_date: data.date,
+          });
+        }
+      } catch (error) {
+        console.error(
+          "Erro ao buscar a cotação do Euro, aplicando fallback:",
+          error,
+        );
+        // Fallback em caso de erro de rede ou qualquer falha
+        setExchangeRate({
+          code: "EUR",
+          codein: "BRL",
+          name: "Euro/Real (Offline)",
+          bid: "6.10",
+          pctChange: "0",
+          create_date: new Date().toISOString(),
+        });
+      } finally {
+        setLoadingRate(false);
+      }
+    }
+
+    fetchEuroRate();
+  }, []);
   // 2. A Mágica do useMemo acontece aqui:
   const totalBudget = useMemo(() => {
-    console.log('🔄 Calculando o total em Euro...'); // Esse log serve para você ver a performance no console!
-    
+    console.log("🔄 Calculando o total em Euro..."); // Esse log serve para você ver a performance no console!
+
     // Usamos o método .reduce do JavaScript para somar os valores da lista
     return expenses.reduce((accumulator, currentExpense) => {
       return accumulator + currentExpense.valueInEuro;
     }, 0);
-
   }, [expenses]); // <-- ARRAY DE DEPENDÊNCIAS: O cálculo só refaz se a lista 'expenses' mudar!
 
   const toggleExpenseStatus = (id: string) => {
-    const updatedExpenses = expenses.map(expense => {
+    const updatedExpenses = expenses.map((expense) => {
       if (expense.id === id) {
         return { ...expense, isPaid: !expense.isPaid };
       }
@@ -28,14 +102,17 @@ export default function HomeScreen() {
   };
 
   const renderExpenseItem = ({ item }: { item: EuroExpense }) => (
-    <TouchableOpacity style={styles.card} onPress={() => toggleExpenseStatus(item.id)}>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => toggleExpenseStatus(item.id)}
+    >
       <View style={styles.cardHeader}>
         <Text style={styles.title}>{item.title}</Text>
         <Text style={styles.categoryTag}>{item.category}</Text>
       </View>
       <Text style={styles.price}>€ {item.valueInEuro.toFixed(2)}</Text>
       <Text style={[styles.status, item.isPaid ? styles.paid : styles.pending]}>
-        {item.isPaid ? 'Pago ✅' : 'Pendente ⏳'}
+        {item.isPaid ? "Pago ✅" : "Pendente ⏳"}
       </Text>
     </TouchableOpacity>
   );
@@ -45,14 +122,43 @@ export default function HomeScreen() {
       <Text style={styles.headerTitle}>EuroMarket Hub 🇪🇺</Text>
       <Text style={styles.subtitle}>Planejamento de Custos</Text>
 
-      {/* 3. Exibindo o valor total calculado pelo useMemo na tela */}
+      {/* CARD DE COTAÇÃO DO EURO EM TEMPO REAL */}
+      <View style={styles.rateCard}>
+        {loadingRate ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : exchangeRate ? (
+          <View style={styles.rateRow}>
+            <Text style={styles.rateLabel}>Cotação Hoje (EUR ➔ BRL):</Text>
+            <Text style={styles.rateValue}>
+              R$ {parseFloat(exchangeRate.bid).toFixed(2)}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.rateError}>
+            Não foi possível carregar o Euro hoje ⚠️
+          </Text>
+        )}
+      </View>
+
+      {/* CARD DO TOTAL DE CUSTOS EM EURO */}
       <View style={styles.totalContainer}>
         <Text style={styles.totalLabel}>Custo Total Estimado:</Text>
         <Text style={styles.totalValue}>€ {totalBudget.toFixed(2)}</Text>
+
+        {/* Mostra o total convertido em Reais se a cotação já tiver carregado */}
+        {exchangeRate && (
+          <Text style={styles.totalConverted}>
+            ≈ R${" "}
+            {(totalBudget * parseFloat(exchangeRate.bid)).toLocaleString(
+              "pt-BR",
+              { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+            )}
+          </Text>
+        )}
       </View>
 
       <FlatList
-        data={expenses} 
+        data={expenses}
         keyExtractor={(item) => item.id}
         renderItem={renderExpenseItem}
         contentContainerStyle={styles.listContainer}
@@ -129,21 +235,53 @@ const styles = StyleSheet.create({
   },
   // Adicione estes blocos dentro do seu StyleSheet
   totalContainer: {
-    backgroundColor: '#1a237e', // Um azul escuro bem elegante
+    backgroundColor: "#1a237e", // Um azul escuro bem elegante
     padding: 20,
     borderRadius: 12,
     marginBottom: 20,
   },
   totalLabel: {
-    color: '#bbdefb',
+    color: "#bbdefb",
     fontSize: 14,
-    fontWeight: '500',
-    textTransform: 'uppercase',
+    fontWeight: "500",
+    textTransform: "uppercase",
   },
   totalValue: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: "bold",
+    marginTop: 4,
+  },
+
+  rateCard: {
+    backgroundColor: "#0d47a1",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  rateRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  rateLabel: {
+    color: "#bbdefb",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  rateValue: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  rateError: {
+    color: "#ffcdd2",
+    fontSize: 12,
+  },
+  totalConverted: {
+    color: "#81c784",
+    fontSize: 14,
+    fontWeight: "600",
     marginTop: 4,
   },
 });
