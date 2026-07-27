@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react"; // 1. Importamos o useMemo aqui
 import {
@@ -12,10 +13,12 @@ import { mockExpenses } from "../../src/constants/mockData";
 import { CurrencyRate, EuroExpense } from "../../src/types";
 
 export default function HomeScreen() {
+  const STORAGE_KEY = "@euromarket_expenses";
   const router = useRouter();
   const params = useLocalSearchParams<{ newExpenseData?: string }>(); // Captura os parâmetros recebidos
 
-  const [expenses, setExpenses] = useState<EuroExpense[]>(mockExpenses);
+  const [expenses, setExpenses] = useState<EuroExpense[]>([]);
+  const [isStorageLoaded, setIsStorageLoaded] = useState<boolean>(false);
   const [exchangeRate, setExchangeRate] = useState<CurrencyRate | null>(null);
   const [loadingRate, setLoadingRate] = useState<boolean>(true);
 
@@ -103,7 +106,47 @@ export default function HomeScreen() {
     }
 
     fetchEuroRate();
-  }, []); // <-- ATENÇÃO AQUI: Fecha o useEffect com });
+  }, []);
+
+  // Efeito 1: Carrega os dados salvos no AsyncStorage quando a tela abre
+  useEffect(() => {
+    async function loadSavedExpenses() {
+      try {
+        const savedData = await AsyncStorage.getItem(STORAGE_KEY);
+        if (savedData !== null) {
+          // Se encontrou dados salvos, converte de String JSON para Array de objetos
+          setExpenses(JSON.parse(savedData));
+        } else {
+          // Se é a PRIMEIRA VEZ que o app abre, usa os dados do mock
+          setExpenses(mockExpenses);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar despesas do armazenamento:", error);
+        setExpenses(mockExpenses);
+      } finally {
+        setIsStorageLoaded(true); // Marca que o carregamento inicial terminou
+      }
+    }
+
+    loadSavedExpenses();
+  }, []);
+
+  // Efeito 2: Salva no AsyncStorage sempre que o estado 'expenses' for alterado
+  useEffect(() => {
+    async function saveExpenses() {
+      if (!isStorageLoaded) return; // Não salva enquanto não tiver feito o primeiro carregamento!
+
+      try {
+        const jsonValue = JSON.stringify(expenses);
+        await AsyncStorage.setItem(STORAGE_KEY, jsonValue);
+        console.log("💾 Despesas salvas no AsyncStorage com sucesso!");
+      } catch (error) {
+        console.error("Erro ao salvar despesas:", error);
+      }
+    }
+
+    saveExpenses();
+  }, [expenses, isStorageLoaded]);
 
   // 2. A Mágica do useMemo acontece aqui:
   const totalBudget = useMemo(() => {
