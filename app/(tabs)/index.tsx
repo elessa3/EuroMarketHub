@@ -1,3 +1,4 @@
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react"; // 1. Importamos o useMemo aqui
 import {
   ActivityIndicator,
@@ -11,12 +12,34 @@ import { mockExpenses } from "../../src/constants/mockData";
 import { CurrencyRate, EuroExpense } from "../../src/types";
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ newExpenseData?: string }>(); // Captura os parâmetros recebidos
+
   const [expenses, setExpenses] = useState<EuroExpense[]>(mockExpenses);
-  // Novos estados para controlar os dados da API e o carregamento
   const [exchangeRate, setExchangeRate] = useState<CurrencyRate | null>(null);
   const [loadingRate, setLoadingRate] = useState<boolean>(true);
 
   // 2. A MÁGICA DO useEffect ACONTECE AQUI:
+  useEffect(() => {
+    if (params.newExpenseData) {
+      try {
+        const parsedExpense: EuroExpense = JSON.parse(params.newExpenseData);
+        // Adiciona a nova despesa no início da lista para o usuário ver logo de cara!
+        setExpenses((prevExpenses) => {
+          // Evita duplicar se o efeito rodar mais de uma vez
+          const exists = prevExpenses.some(
+            (item) => item.id === parsedExpense.id,
+          );
+          if (exists) return prevExpenses;
+          return [parsedExpense, ...prevExpenses];
+        });
+      } catch (e) {
+        console.error("Erro ao processar nova despesa:", e);
+      }
+    }
+  }, [params.newExpenseData]);
+
+  // 2. useEffect para buscar a cotação do Euro na API
   useEffect(() => {
     async function fetchEuroRate() {
       try {
@@ -80,7 +103,8 @@ export default function HomeScreen() {
     }
 
     fetchEuroRate();
-  }, []);
+  }, []); // <-- ATENÇÃO AQUI: Fecha o useEffect com });
+
   // 2. A Mágica do useMemo acontece aqui:
   const totalBudget = useMemo(() => {
     console.log("🔄 Calculando o total em Euro..."); // Esse log serve para você ver a performance no console!
@@ -163,6 +187,14 @@ export default function HomeScreen() {
         renderItem={renderExpenseItem}
         contentContainerStyle={styles.listContainer}
       />
+
+      {/* BOTÃO PARA ABRIR O FORMULÁRIO */}
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => router.push("/modal")}
+      >
+        <Text style={styles.addButtonText}>+ Nova Despesa</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -283,5 +315,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     marginTop: 4,
+  },
+  addButton: {
+    backgroundColor: "#2e7d32",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  addButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });
